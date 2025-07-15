@@ -283,10 +283,10 @@ class APGForge(scripts.Script):
         # self.prev_sigmaやself.running_avgの管理はapg_cfg_function自身で行う。
         # APG Forgeのコードでは`_reset_apg_state`が`is_first_step_of_a_pass`で呼ばれるので、
         # `running_avg`と`prev_sigma`は正しくリセットされるはず。
-        #if self.prev_sigma is not None and sigma_val != -1.0 and self.prev_sigma != -1.0 and sigma_val > self.prev_sigma :
-        #    self.running_avg = 0 
-        #    if should_log_details_for_this_step:
-        #         self.log_message(f"Momentum reset: sigma increased from {self.prev_sigma:.4f} to {sigma_val:.4f}.", "DEBUG", step, sigma_val)
+        if self.prev_sigma is not None and sigma_val != -1.0 and self.prev_sigma != -1.0 and sigma_val > self.prev_sigma :
+            self.running_avg = 0 
+            if should_log_details_for_this_step:
+                 self.log_message(f"Momentum reset: sigma increased from {self.prev_sigma:.4f} to {sigma_val:.4f}.", "DEBUG", step, sigma_val)
         
         # is_true_first_step_of_passの判定は`process_before_every_sampling`に任せるため、
         # ここで再度`running_avg = 0`としない。
