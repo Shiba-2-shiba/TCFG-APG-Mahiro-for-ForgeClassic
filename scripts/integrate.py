@@ -77,17 +77,17 @@ class IntegratedGuidanceScript(scripts.Script):
             # APGのUI要素。APG有効時に表示を制御するため、初期値はFalse/0
             apg_eta = gr.Slider(
                 label="APG Eta (Parallel Component Scale)",
-                minimum=0.0, maximum=1.0, step=0.01, value=0.0,
+                minimum=0.0, maximum=1.0, step=0.01, value=0.3,
                 elem_id=f"{elem_id_prefix}_apg_eta", visible=False # 初期は非表示
             )
             apg_norm_threshold = gr.Slider(
                 label="APG Norm Threshold (Rescaling Radius r, 0 = disable rescaling)",
-                minimum=0.0, maximum=50.0, step=0.1, value=5.0, # 論文推奨値に近い初期値
+                minimum=0.0, maximum=50.0, step=0.1, value=10.0, # 論文推奨値に近い初期値
                 elem_id=f"{elem_id_prefix}_apg_norm_threshold", visible=False # 初期は非表示
             )
             apg_momentum_beta = gr.Slider(
                 label="APG Beta (Momentum Strength, negative for reverse)",
-                minimum=-1.0, maximum=1.0, step=0.01, value=-0.5, # 論文推奨値に近い初期値
+                minimum=-1.0, maximum=1.0, step=0.01, value=-0.15, # 論文推奨値に近い初期値
                 elem_id=f"{elem_id_prefix}_apg_momentum_beta", visible=False # 初期は非表示
             )
             apg_debug_logging = gr.Checkbox(
