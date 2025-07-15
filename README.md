@@ -21,7 +21,10 @@ git clone https://github.com/Shiba-2-shiba/TCFG-APG-Mahiro-for-ForgeClassic.git
 ```
 ## Tab
 
-![初期化画面](img/img1.png)
+![初期化画面](img/1.png)
 
 
+## Enabked APG value
+
+![初期化画面](img/2.png)
 
