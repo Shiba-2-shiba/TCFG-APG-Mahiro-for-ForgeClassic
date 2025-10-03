@@ -52,7 +52,8 @@ class BaseGuidanceScript(scripts.Script):
         return self._script_name
 
     def show(self, is_img2img):
-        return scripts.AlwaysHidden
+        # scripts.AlwaysHidden は存在しないため、Falseを返すように修正
+        return False
 
     def ui(self, is_img2img):
         return []
