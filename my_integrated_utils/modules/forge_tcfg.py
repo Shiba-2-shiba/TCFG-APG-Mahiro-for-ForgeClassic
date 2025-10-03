@@ -1,13 +1,12 @@
 import torch
 import gradio as gr
-from modules import scripts, shared, script_callbacks # Forgeの標準モジュール
-import datetime # ログのタイムスタンプ用
-import traceback # エラー発生時の詳細情報取得用
+from modules import shared, script_callbacks # Forgeの標準モジュール
 import os # 基本的なOS機能
+from .base_script import BaseGuidanceScript
 
 # TCFG: Tangential Damping Classifier-free Guidance - (arXiv: https://arxiv.org/abs/2503.18137)
 
-class TCFGForge(scripts.Script):
+class TCFGForge(BaseGuidanceScript):
     _instance = None # シングルトンインスタンス管理
     
     group = gr.Group(visible=False) # ダミーのGradioグループ要素。UIには表示されないが、内部参照用
@@ -17,7 +16,6 @@ class TCFGForge(scripts.Script):
         if TCFGForge._instance is None:
             TCFGForge._instance = self
 
-        self.tcfg_enabled = False
         self._enable_debug_logging_ui = False
         self.force_all_steps_debug_log = False
         self._script_name = "TCFGForge"
@@ -28,41 +26,6 @@ class TCFGForge(scripts.Script):
         script_callbacks.on_model_loaded(self.on_model_loaded_instance_method)
         script_callbacks.on_script_unloaded(self.on_script_unloaded_instance_method)
         self.log_message("TCFGForge Script Initialized.", "INFO")
-
-    def log_message(self, message, level="INFO", step_info=None, sigma_info=None):
-        is_debug_message = level == "DEBUG"
-        if is_debug_message and not self._enable_debug_logging_ui:
-            return
-
-        timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
-        step_str = f"S:{step_info}" if step_info is not None else ""
-        sigma_val_str = ""
-        if isinstance(sigma_info, torch.Tensor) and sigma_info.numel() > 0:
-            try:
-                sigma_val_str = f"σ:{sigma_info.cpu().item():.4f}" if sigma_info.numel() == 1 else f"σ_shape:{sigma_info.shape}"
-            except Exception: 
-                sigma_val_str = f"σ_shape:{sigma_info.shape}(cpu_item_error)"
-        elif isinstance(sigma_info, float):
-            sigma_val_str = f"σ:{sigma_info:.4f}"
-        
-        prefix_info = f"({step_str} {sigma_val_str})".strip().replace("  ", " ")
-        if prefix_info == "()": prefix_info = ""
-        
-        print(f"{timestamp} {level} [{self._script_name}]{prefix_info} {message}")
-
-    def should_log_debug(self, condition_is_true_for_extra_debug=True):
-        return self._enable_debug_logging_ui and \
-               (condition_is_true_for_extra_debug or self.force_all_steps_debug_log_if_global_debug_on)
-
-    def title(self):
-        return "Tangential Damping CFG (TCFG) - Forge"
-
-    def show(self, is_img2img):
-        # 修正: scripts.AlwaysHidden の代わりに整数値 1 を返す
-        return 1 # 統合スクリプトでUIを制御するためHiddenにする
-
-    def ui(self, is_img2img):
-        return [] # 統合スクリプトでUIを制御するため空にする
 
     def elem_id_prefix(self, is_img2img):
         return f"tcfg_forge_script_{'img2img' if is_img2img else 'txt2img'}"
@@ -86,19 +49,19 @@ class TCFGForge(scripts.Script):
             self.log_message(f"TCFG internal state reset.", "DEBUG")
 
     def process(self, p,
+                tcfg_enabled,
                 enable_debug_logging_ui,
-                force_all_steps_debug_log_ui,
-                tcfg_enabled):
-        
+                force_all_steps_debug_log_ui):
+
+        self.is_enabled = tcfg_enabled
         self._enable_debug_logging_ui = enable_debug_logging_ui
         self.force_all_steps_debug_log = force_all_steps_debug_log_ui
         self.force_all_steps_debug_log_if_global_debug_on = self._enable_debug_logging_ui and self.force_all_steps_debug_log
-        
+
         self.log_message(f"TCFG process() called. Debug Logging UI: {self._enable_debug_logging_ui}, Force All Steps Log Active: {self.force_all_steps_debug_log_if_global_debug_on}", "INFO")
 
-        self.tcfg_enabled = tcfg_enabled
         if self.should_log_debug(True):
-            self.log_message(f"TCFG params captured: enabled={self.tcfg_enabled}", "DEBUG")
+            self.log_message(f"TCFG params captured: enabled={self.is_enabled}", "DEBUG")
 
         # infotextは統合スクリプトで管理するため、ここでは設定しない
         # p.extra_generation_params["TCFG Debug Logging"] = self._enable_debug_logging_ui

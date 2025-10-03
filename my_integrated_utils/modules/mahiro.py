@@ -2,10 +2,10 @@ import gradio as gr
 import torch
 import torch.nn.functional as F
 
-from modules import scripts, shared, script_callbacks
-import datetime
+from modules import shared
+from .base_script import BaseGuidanceScript
 
-class ScriptMahiro(scripts.ScriptBuiltinUI): # ScriptBuiltinUIのまま
+class ScriptMahiro(BaseGuidanceScript):
     section = "cfg" # これはUI表示に影響しない
     create_group = False
     sorting_priority = 1
@@ -20,56 +20,20 @@ class ScriptMahiro(scripts.ScriptBuiltinUI): # ScriptBuiltinUIのまま
             ScriptMahiro._instance = self
         self._script_name = "MaHiRo"
         self._enable_debug_logging_ui = False # デバッグログ用のフラグ
-        self.mahiro_enabled = False # UIからの有効化フラグを保持
+
         self.log_message("MaHiRo Script Initialized.", "INFO")
 
         # infotext_fieldsは統合スクリプトで管理されるため、ここでは空にする
         self.infotext_fields = []
 
-    def log_message(self, message, level="INFO", step_info=None, sigma_info=None):
-        is_debug_message = level == "DEBUG"
-        if is_debug_message and not self._enable_debug_logging_ui:
-            return
-
-        timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
-        step_str = f"S:{step_info}" if step_info is not None else ""
-        sigma_val_str = ""
-        if isinstance(sigma_info, torch.Tensor) and sigma_info.numel() > 0:
-            try:
-                sigma_val_str = f"σ:{sigma_info.cpu().item():.4f}" if sigma_info.numel() == 1 else f"σ_shape:{sigma_info.shape}"
-            except Exception:
-                sigma_val_str = f"σ_shape:{sigma_info.shape}(cpu_item_error)"
-        elif isinstance(sigma_info, float):
-            sigma_val_str = f"σ:{sigma_info:.4f}"
-        
-        prefix_info = f"({step_str} {sigma_val_str})".strip().replace("  ", " ")
-        if prefix_info == "()": prefix_info = ""
-        
-        print(f"{timestamp} {level} [{self._script_name}]{prefix_info} {message}")
-
-    def should_log_debug(self, condition_is_true_for_extra_debug=True):
-        # MaHiRoにはforce_all_steps_debug_logがないので、簡易版
-        return self._enable_debug_logging_ui and condition_is_true_for_extra_debug
-
-    def title(self):
-        return "MaHiRo" # UI上は単独では表示されないため、これは内部的な名前
-
-    def show(self, is_img2img):
-        # 修正: scripts.AlwaysHidden の代わりに整数値 1 を返す
-        return 1 # 統合スクリプトがUIを制御するため、MaHiRo自身は常に非表示
-
-    def ui(self, is_img2img):
-        # 統合スクリプトがUIを制御するため、MaHiRo自身のUIは空
-        return []
-
     def process(self, p, enable_mahiro, enable_debug_logging_ui):
         # 統合スクリプトから有効化フラグとデバッグログフラグを受け取る
-        self.mahiro_enabled = enable_mahiro
+        self.is_enabled = enable_mahiro
         self._enable_debug_logging_ui = enable_debug_logging_ui
-        self.log_message(f"MaHiRo process() called. Enabled: {self.mahiro_enabled}, Debug Logging: {self._enable_debug_logging_ui}", "INFO")
+        self.log_message(f"MaHiRo process() called. Enabled: {self.is_enabled}, Debug Logging: {self._enable_debug_logging_ui}", "INFO")
 
         # infotextは統合スクリプトで処理されるため、ここでは不要だが、もし独自に持ちたいなら
-        # p.extra_generation_params.update({"MaHiRo": self.mahiro_enabled})
+        # p.extra_generation_params.update({"MaHiRo": self.is_enabled})
         pass # MaHiRoはprocess_before_every_samplingでフックせず、統合関数から直接呼ばれる
 
     def process_before_every_sampling(self, p, enable, *args, **kwargs):
@@ -90,7 +54,7 @@ class ScriptMahiro(scripts.ScriptBuiltinUI): # ScriptBuiltinUIのまま
         else:
             sigma_val = -1.0 # Or handle batch sigma
 
-        if self.mahiro_enabled: # 統合スクリプトからのフラグを参照
+        if self.is_enabled: # 統合スクリプトからのフラグを参照
             if self.should_log_debug(True):
                 self.log_message(f"mahiro_normd invoked.", "DEBUG", step, sigma_val)
                 # デバッグログの出力 (APG/TCFGに合わせてlog_tensor_info_via_instanceを実装するか、直接出力)

@@ -160,19 +160,32 @@ class IntegratedGuidanceScript(scripts.Script):
         
         if self._apg_instance:
             self._apg_instance.process(
-                p, apg_debug_logging, apg_force_all_steps_debug_log, apg_enabled,
-                apg_eta, apg_norm_threshold, apg_momentum_beta
+                p,
+                apg_enabled,
+                apg_debug_logging,
+                apg_force_all_steps_debug_log,
+                apg_eta,
+                apg_norm_threshold,
+                apg_momentum_beta
             )
-            if apg_enabled:
-                if self._tcfg_instance:
-                    self._tcfg_instance.process(p, tcfg_debug_logging, tcfg_force_all_steps_debug_log, True)
-                if self._mahiro_instance:
-                    self._mahiro_instance.process(p, True, mahiro_debug_logging)
-            else:
-                if self._tcfg_instance:
-                    self._tcfg_instance.process(p, False, False, False)
-                if self._mahiro_instance:
-                    self._mahiro_instance.process(p, False, False)
+
+        is_tcfg_enabled = apg_enabled
+        is_mahiro_enabled = apg_enabled
+
+        if self._tcfg_instance:
+            self._tcfg_instance.process(
+                p,
+                is_tcfg_enabled,
+                tcfg_debug_logging,
+                tcfg_force_all_steps_debug_log
+            )
+
+        if self._mahiro_instance:
+            self._mahiro_instance.process(
+                p,
+                is_mahiro_enabled,
+                mahiro_debug_logging
+            )
 
         p.extra_generation_params["Integrated Guidance Enabled"] = apg_enabled
         if apg_enabled:
@@ -200,7 +213,7 @@ class IntegratedGuidanceScript(scripts.Script):
             print("IntegratedGuidanceScript: APG instance not initialized, skipping hooks.")
             return
 
-        apg_is_currently_enabled = self._apg_instance.apg_enabled
+        apg_is_currently_enabled = self._apg_instance.is_enabled
 
         model_patcher = None
         if hasattr(shared, 'sd_model') and hasattr(shared.sd_model, 'forge_objects') and hasattr(shared.sd_model.forge_objects, 'unet'):
@@ -266,7 +279,7 @@ class IntegratedGuidanceScript(scripts.Script):
         # ----------------------------------------------------
         # 1. TCFGの適用 (uncond_denoisedの修正)
         uncond_denoised_after_tcfg = uncond_denoised_initial
-        if tcfg_script_instance and tcfg_script_instance.tcfg_enabled:
+        if tcfg_script_instance and tcfg_script_instance.is_enabled:
             if should_log_details:
                 apg_script_instance.log_message(f"--- TCFG Pre-computation for APG ---", "DEBUG", step, sigma_val)
 
@@ -284,7 +297,7 @@ class IntegratedGuidanceScript(scripts.Script):
         # APGが無効な場合は、TCFG適用後の結果（または素のCFG）でノイズ予測を計算する
         denoised_after_guidance = uncond_denoised_after_tcfg + initial_cond_scale * (cond_denoised_initial - uncond_denoised_after_tcfg)
 
-        if apg_script_instance and apg_script_instance.apg_enabled:
+        if apg_script_instance and apg_script_instance.is_enabled:
             if should_log_details:
                 apg_script_instance.log_message(f"--- APG Processing ---", "DEBUG", step, sigma_val)
 
@@ -306,7 +319,7 @@ class IntegratedGuidanceScript(scripts.Script):
         # ----------------------------------------------------
         # 3. MaHiRoの適用
         final_denoised_prediction = denoised_after_guidance
-        if mahiro_script_instance and mahiro_script_instance.mahiro_enabled:
+        if mahiro_script_instance and mahiro_script_instance.is_enabled:
             if should_log_details:
                 apg_script_instance.log_message(f"--- MaHiRo Processing ---", "DEBUG", step, sigma_val)
 
