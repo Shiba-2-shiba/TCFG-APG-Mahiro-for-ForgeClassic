@@ -1,9 +1,8 @@
 import torch
 import gradio as gr
-from modules import scripts, shared, script_callbacks # Forgeの標準モジュール
-import datetime # ログのタイムスタンプ用
-import traceback # エラー発生時の詳細情報取得用
+from modules import shared, script_callbacks # Forgeの標準モジュール
 import os # 基本的なOS機能
+from .base_script import BaseGuidanceScript
 
 # --- APG Core Logic ---
 def project_apg(v0, v1, script_instance=None, step=-1, sigma=-1.0):
@@ -82,9 +81,9 @@ def log_tensor_info_via_instance(script_instance, name, tensor, step, sigma, for
     else:
         script_instance.log_message(f"{log_msg_prefix}: type={type(tensor)}", "DEBUG", step, sigma)
 
-class APGForge(scripts.Script):
+class APGForge(BaseGuidanceScript):
     _instance = None # シングルトンインスタンス管理
-    
+
     group = gr.Group(visible=False) # ダミーのGradioグループ要素。UIには表示されないが、内部参照用
 
     def __init__(self):
@@ -92,7 +91,6 @@ class APGForge(scripts.Script):
         if APGForge._instance is None:
             APGForge._instance = self
 
-        self.apg_enabled = False
         self.apg_eta = 0.0
         self.apg_norm_threshold = 5.0
         self.apg_momentum_beta = 0.0
@@ -108,41 +106,6 @@ class APGForge(scripts.Script):
         script_callbacks.on_model_loaded(self.on_model_loaded_instance_method)
         script_callbacks.on_script_unloaded(self.on_script_unloaded_instance_method)
         self.log_message("APGForge Script Initialized.", "INFO")
-
-    def log_message(self, message, level="INFO", step_info=None, sigma_info=None):
-        is_debug_message = level == "DEBUG"
-        if is_debug_message and not self._enable_debug_logging_ui:
-            return
-
-        timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
-        step_str = f"S:{step_info}" if step_info is not None else ""
-        sigma_val_str = ""
-        if isinstance(sigma_info, torch.Tensor) and sigma_info.numel() > 0:
-            try:
-                sigma_val_str = f"σ:{sigma_info.cpu().item():.4f}" if sigma_info.numel() == 1 else f"σ_shape:{sigma_info.shape}"
-            except Exception:
-                sigma_val_str = f"σ_shape:{sigma_info.shape}(cpu_item_error)"
-        elif isinstance(sigma_info, float):
-            sigma_val_str = f"σ:{sigma_info:.4f}"
-        
-        prefix_info = f"({step_str} {sigma_val_str})".strip().replace("  ", " ")
-        if prefix_info == "()": prefix_info = ""
-        
-        print(f"{timestamp} {level} [{self._script_name}]{prefix_info} {message}")
-
-    def should_log_debug(self, condition_is_true_for_extra_debug=True):
-        return self._enable_debug_logging_ui and \
-               (condition_is_true_for_extra_debug or self.force_all_steps_debug_log_if_global_debug_on)
-
-    def title(self):
-        return "Adaptive Projected Guidance (APG) - Forge"
-
-    def show(self, is_img2img):
-        # 修正: scripts.AlwaysHidden の代わりに整数値 1 を返す
-        return 1 # 統合スクリプトでUIを制御するためHiddenにする
-
-    def ui(self, is_img2img):
-        return [] # 統合スクリプトでUIを制御するため空にする
 
     def elem_id_prefix(self, is_img2img):
         return f"apg_forge_script_{'img2img' if is_img2img else 'txt2img'}"
@@ -168,30 +131,30 @@ class APGForge(scripts.Script):
             self.log_message(f"APG internal state reset: running_avg=0, prev_sigma=None", "DEBUG")
 
     def process(self, p,
+                apg_enabled,
                 enable_debug_logging_ui,
                 force_all_steps_debug_log_ui,
-                apg_enabled,
                 apg_eta,
                 apg_norm_threshold,
                 apg_momentum_beta):
-        
+
+        self.is_enabled = apg_enabled
         self._enable_debug_logging_ui = enable_debug_logging_ui
         self.force_all_steps_debug_log = force_all_steps_debug_log_ui
         self.force_all_steps_debug_log_if_global_debug_on = self._enable_debug_logging_ui and self.force_all_steps_debug_log
-        
-        self.log_message(f"APG process() called. Debug Logging UI: {self._enable_debug_logging_ui}, Force All Steps Log Active: {self.force_all_steps_debug_log_if_global_debug_on}", "INFO")
 
-        self.apg_enabled = apg_enabled
+        self.log_message(f"APG process() called. Debug Logging UI: {self._enable_debug_logging_ui}, Force All Steps Log Active:{self.force_all_steps_debug_log_if_global_debug_on}", "INFO")
+
         self.apg_eta = apg_eta
         self.apg_norm_threshold = apg_norm_threshold
         self.apg_momentum_beta = apg_momentum_beta
         if self.should_log_debug(True):
-            self.log_message(f"APG params captured: enabled={self.apg_enabled}, eta={self.apg_eta:.2f}, norm_thresh={self.apg_norm_threshold:.2f}, beta={self.apg_momentum_beta:.2f}", "DEBUG")
+            self.log_message(f"APG params captured: enabled={self.is_enabled}, eta={self.apg_eta:.2f}, norm_thresh={self.apg_norm_threshold:.2f}, beta={self.apg_momentum_beta:.2f}", "DEBUG")
 
         # infotextは統合スクリプトで管理するため、ここでは設定しない
         # p.extra_generation_params["APG Debug Logging"] = self._enable_debug_logging_ui
         # p.extra_generation_params["APG Force All Steps Log"] = self.force_all_steps_debug_log
-        # p.extra_generation_params["APG Enabled"] = self.apg_enabled
+        # p.extra_generation_params["APG Enabled"] = self.is_enabled
         # ...
 
     def process_before_every_sampling(self, p, *args, **kwargs):
